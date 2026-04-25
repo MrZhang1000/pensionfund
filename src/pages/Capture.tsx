@@ -106,17 +106,32 @@ export default function Capture() {
     const visited = new Array(width * height).fill(false);
     let count = 0;
 
-    const floodFill = (x: number, y: number): number => {
-      if (x < 0 || x >= width || y < 0 || y >= height) return 0;
-      const index = y * width + x;
-      if (visited[index] || binary[index] === 0) return 0;
+    // 迭代实现的floodFill函数，避免栈溢出
+    const floodFill = (startX: number, startY: number): number => {
+      if (startX < 0 || startX >= width || startY < 0 || startY >= height) return 0;
+      const startIndex = startY * width + startX;
+      if (visited[startIndex] || binary[startIndex] === 0) return 0;
 
-      visited[index] = true;
-      let size = 1;
-      size += floodFill(x + 1, y);
-      size += floodFill(x - 1, y);
-      size += floodFill(x, y + 1);
-      size += floodFill(x, y - 1);
+      let size = 0;
+      const stack = [{ x: startX, y: startY }];
+      
+      while (stack.length > 0) {
+        const { x, y } = stack.pop()!;
+        const index = y * width + x;
+        
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        if (visited[index] || binary[index] === 0) continue;
+        
+        visited[index] = true;
+        size++;
+        
+        // 向四个方向扩展
+        stack.push({ x: x + 1, y });
+        stack.push({ x: x - 1, y });
+        stack.push({ x, y: y + 1 });
+        stack.push({ x, y: y - 1 });
+      }
+      
       return size;
     };
 
