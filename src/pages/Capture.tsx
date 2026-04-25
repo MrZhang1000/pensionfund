@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Camera, ChevronLeft } from 'lucide-react';
+import { Camera, ChevronLeft, Upload } from 'lucide-react';
 
 export default function Capture() {
   const navigate = useNavigate();
@@ -11,6 +11,7 @@ export default function Capture() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 物体类型名称映射
   const typeNames: Record<string, string> = {
@@ -104,6 +105,40 @@ export default function Capture() {
     navigate('/');
   };
 
+  const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCapturing(true);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const imageData = event.target?.result as string;
+      
+      // 模拟识别过程
+      setTimeout(() => {
+        // 模拟计数结果
+        const count = Math.floor(Math.random() * 50) + 10; // 生成10-60之间的随机数
+        
+        // 跳转到结果页面
+        navigate('/result', { 
+          state: { 
+            count, 
+            type, 
+            image: imageData 
+          } 
+        });
+      }, 1000);
+    };
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div className="min-h-screen bg-black flex flex-col">
       {/* 顶部导航 */}
@@ -126,8 +161,15 @@ export default function Capture() {
       />
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* 拍照按钮 */}
-      <div className="py-8 flex justify-center">
+      {/* 拍照和上传按钮 */}
+      <div className="py-8 flex justify-center space-x-8">
+        <button
+          onClick={handleUploadClick}
+          disabled={isCapturing}
+          className={`w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg ${isCapturing ? 'opacity-50' : 'hover:scale-105 transition-transform'}`}
+        >
+          <Upload size={24} className="text-blue-600" />
+        </button>
         <button
           onClick={handleCapture}
           disabled={isCapturing}
@@ -136,6 +178,16 @@ export default function Capture() {
           <Camera size={32} className="text-blue-600" />
         </button>
       </div>
+      
+      {/* 隐藏的文件输入框 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleFileUpload}
+      />
     </div>
   );
 }
