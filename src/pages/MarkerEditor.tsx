@@ -9,24 +9,21 @@ export default function MarkerEditor() {
   const location = useLocation();
   
   const {
-    currentImage, currentMarkers, addMarker, removeMarker, clearMarkers, addRecord, updateRecord, records, setCurrentImage } = useCountStore();
+    currentImage, currentMarkers, addMarker, removeMarker, clearMarkers, addRecord, updateRecord, records } = useCountStore();
   const [markerColor, setMarkerColor] = useState<'green' | 'red'>('green');
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // 直接从location.state获取图片，不使用store中的currentImage
+  const imageFromState = location.state?.image;
+  const recordImage = id ? records.find((r) => r.id === id)?.image : null;
+  const displayImage = imageFromState || recordImage;
+
   useEffect(() => {
     clearMarkers(); // 先清除旧的标记
-    if (id) {
-      const record = records.find((r) => r.id === id);
-      if (record) {
-        setCurrentImage(record.image);
-      }
-    } else if (location.state?.image) {
-      setCurrentImage(location.state.image);
-    }
-  }, [id, records, setCurrentImage, clearMarkers]);
+  }, [id, clearMarkers]);
 
   const objectTypeNames: Record<string, string> = {
     'steel-pipe': '钢管',
@@ -128,11 +125,11 @@ export default function MarkerEditor() {
   };
 
   const handleSave = () => {
-    if (!currentImage) return;
+    if (!displayImage) return;
 
     const recordData: CountRecord = {
       id: id || Date.now().toString(),
-      image: currentImage,
+      image: displayImage,
       count: currentMarkers.length,
       markers: [...currentMarkers],
       objectType: location.state?.type || 'steel-pipe',
@@ -222,10 +219,10 @@ export default function MarkerEditor() {
         onClick={handleClick}
         style={{ cursor: 'crosshair' }}
       >
-        {currentImage && (
+        {displayImage && (
           <img
             ref={imageRef}
-            src={currentImage}
+            src={displayImage}
             alt="计数图片"
             className="max-w-full max-h-full object-contain"
             onLoad={handleImageLoad}
