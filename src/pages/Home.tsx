@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Camera, ChevronRight, Settings } from 'lucide-react';
+import { Camera, ChevronRight, Settings, History as HistoryIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useCountStore } from '../store/countStore';
 
 // 物体类型数据
 const objectTypes = [
@@ -32,10 +33,48 @@ const objectTypes = [
 
 export default function Home() {
   const navigate = useNavigate();
-  const [selectedType, setSelectedType] = useState('steel-pipe');
+  const { records } = useCountStore();
+  const recentRecords = records.slice(0, 4);
 
   const handleCapture = (type: string) => {
     navigate('/capture', { state: { type } });
+  };
+
+  const formatDate = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const objectTypeNames: Record<string, string> = {
+    'steel-pipe': '钢管',
+    'steel-bar': '钢筋',
+    'bamboo': '竹签',
+    'log': '圆木',
+    'square-wood': '方木',
+    'fabric-roll': '布料卷',
+    'disk-rod': '盘扣横杆',
+    'disk-vertical': '盘扣立杆',
+    'disk-diagonal': '盘扣斜杆',
+    'quick-release': '快拆架',
+    'wheel-rod': '轮扣横杆',
+    'square-tube': '方管',
+    'square-column': '方柱扣',
+    'pvc-tube': 'PVC管',
+    'oval-tube': '椭圆管',
+    'pipe-pile': '管桩',
+    'person': '人',
+    'screw': '螺丝',
+    'button': '纽扣',
+    'broad-bean': '蚕豆',
+    'egg': '鸡蛋',
+    'pearl': '珍珠',
+    'cotton-swab': '棉签',
+    'corn': '玉米粒',
   };
 
   return (
@@ -108,14 +147,58 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 历史记录 */}
+      {recentRecords.length > 0 && (
+        <div className="p-4 pb-24">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-800 border-l-4 border-blue-600 pl-2">
+              历史记录
+            </h2>
+            <button
+              onClick={() => navigate('/history')}
+              className="text-blue-600 text-sm flex items-center"
+            >
+              查看更多 <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {recentRecords.map((record) => (
+              <div
+                key={record.id}
+                className="bg-white rounded-lg shadow-sm overflow-hidden cursor-pointer"
+                onClick={() => navigate(`/edit/${record.id}`)}
+              >
+                <img
+                  src={record.image}
+                  alt="计数图片"
+                  className="w-full h-32 object-cover"
+                />
+                <div className="p-3">
+                  <div className="text-xl font-bold text-gray-900">{record.count} 粒</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {objectTypeNames[record.objectType] || record.objectType}
+                  </div>                  <div className="text-xs text-gray-400 mt-1">
+                    {formatDate(record.createdAt)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 底部导航 */}
       <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-3">
         <button className="flex flex-col items-center text-blue-600">
           <Camera size={20} />
           <span className="text-xs mt-1">首页</span>
         </button>
-        <button className="flex flex-col items-center text-gray-500">
-          <span className="text-xs mt-1">我的</span>
+        <button 
+          onClick={() => navigate('/history')}
+          className="flex flex-col items-center text-gray-500"
+        >
+          <HistoryIcon size={20} />
+          <span className="text-xs mt-1">历史</span>
         </button>
       </footer>
     </div>
