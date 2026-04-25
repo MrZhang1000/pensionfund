@@ -52,13 +52,155 @@ export default function MarkerEditor() {
     'corn': '玉米粒',
   };
 
-  // 单独的useEffect来加载历史记录的标记
+  // 自动标记功能：使用Otsu阈值和连通区域检测
+  const autoMarkObjects = () => {
+    if (!displayImage || !imageLoaded || !imageRef.current) return;
+
+    const img = imageRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // 绘制图像到画布
+    ctx.drawImage(img, 0, 0);
+
+    // 获取图像数据
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const pixels = [];
+
+    // 转换为灰度
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      pixels.push(gray);
+    }
+
+    // Otsu阈值计算
+    const histogram = new Array(256).fill(0);
+    for (const pixel of pixels) {
+      histogram[Math.floor(pixel)]++;
+    }
+
+    const total = pixels.length;
+    let sum = 0;
+    for (let i = 0; i < 256; i++) {
+      sum += i * histogram[i];
+    }
+
+    let sumB = 0;
+    let wB = 0;
+    let wF = 0;
+    let maxVariance = 0;
+    let threshold = 0;
+
+    for (let i = 0; i < 256; i++) {
+      wB += histogram[i];
+      if (wB === 0) continue;
+
+      wF = total - wB;
+      if (wF === 0) break;
+
+      sumB += i * histogram[i];
+      const mB = sumB / wB;
+      const mF = (sum - sumB) / wF;
+      const variance = wB * wF * Math.pow(mB - mF, 2);
+
+      if (variance > maxVariance) {
+        maxVariance = variance;
+        threshold = i;
+      }
+    }
+
+    // 二值化
+    const binaryData = new Uint8ClampedArray(data.length);
+    for (let i = 0; i < pixels.length; i++) {
+      const gray = pixels[i];
+      const binary = gray < threshold ? 0 : 255;
+      binaryData[i * 4] = binary;
+      binaryData[i * 4 + 1] = binary;
+      binaryData[i * 4 + 2] = binary;
+      binaryData[i * 4 + 3] = 255;
+    }
+
+    // 连通区域检测
+    const width = canvas.width;
+    const height = canvas.height;
+    const visited = new Array(width * height).fill(false);
+    const regions = [];
+
+    const getIndex = (x: number, y: number) => y * width + x;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = getIndex(x, y);
+        if (!visited[index] && binaryData[index * 4] === 0) {
+          // 开始BFS
+          const queue = [[x, y]];
+          visited[index] = true;
+          const region = [[x, y]];
+
+          while (queue.length > 0) {
+            const [cx, cy] = queue.shift()!;
+            
+            // 8方向邻居
+            const neighbors = [
+              [cx - 1, cy - 1], [cx, cy - 1], [cx + 1, cy - 1],
+              [cx - 1, cy],                     [cx + 1, cy],
+              [cx - 1, cy + 1], [cx, cy + 1], [cx + 1, cy + 1]
+            ];
+
+            for (const [nx, ny] of neighbors) {
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const nIndex = getIndex(nx, ny);
+                if (!visited[nIndex] && binaryData[nIndex * 4] === 0) {
+                  visited[nIndex] = true;
+                  queue.push([nx, ny]);
+                  region.push([nx, ny]);
+                }
+              }
+            }
+          }
+
+          // 计算区域中心
+          if (region.length > 50) { // 过滤小区域
+            let sumX = 0;
+            let sumY = 0;
+            for (const [rx, ry] of region) {
+              sumX += rx;
+              sumY += ry;
+            }
+            const centerX = sumX / region.length;
+            const centerY = sumY / region.length;
+            
+            // 转换为相对坐标 (0-1)
+            const relativeX = centerX / width;
+            const relativeY = centerY / height;
+            
+            regions.push({ x: relativeX, y: relativeY, color: 'green' });
+          }
+        }
+      }
+    }
+
+    // 添加标记
+    regions.forEach((marker) => addMarker(marker));
+  };
+
+  // 单独的useEffect来加载历史记录的标记或自动标记
   useEffect(() => {
     if (id && imageLoaded) {
       const record = records.find((r) => r.id === id);
       if (record) {
         record.markers.forEach((marker) => addMarker(marker));
       }
+    } else if (!id && imageLoaded) {
+      // 新图片，自动标记
+      autoMarkObjects();
     }
   }, [id, records, imageLoaded, addMarker]);
 
