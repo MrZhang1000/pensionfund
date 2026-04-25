@@ -73,8 +73,29 @@ export default function Capture() {
 
   // 改进的计数算法
   const countObjects = (canvas: HTMLCanvasElement) => {
-    const ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d');
     if (!ctx) return 0;
+
+    // 调整画布大小，提高处理速度
+    const maxSize = 800;
+    let newWidth = canvas.width;
+    let newHeight = canvas.height;
+    
+    if (newWidth > maxSize || newHeight > maxSize) {
+      const scale = maxSize / Math.max(newWidth, newHeight);
+      newWidth = Math.floor(newWidth * scale);
+      newHeight = Math.floor(newHeight * scale);
+      
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = newWidth;
+      tempCanvas.height = newHeight;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+        canvas = tempCanvas;
+        ctx = tempCtx;
+      }
+    }
 
     // 获取图像数据
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -82,10 +103,44 @@ export default function Capture() {
     const width = canvas.width;
     const height = canvas.height;
 
+    // 高斯模糊预处理，减少噪声
+    const applyGaussianBlur = (data: Uint8ClampedArray, width: number, height: number) => {
+      const blurred = new Uint8ClampedArray(data.length);
+      const kernel = [
+        [1, 2, 1],
+        [2, 4, 2],
+        [1, 2, 1]
+      ];
+      const kernelSum = 16;
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let r = 0, g = 0, b = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const idx = ((y + ky) * width + (x + kx)) * 4;
+              r += data[idx] * kernel[ky + 1][kx + 1];
+              g += data[idx + 1] * kernel[ky + 1][kx + 1];
+              b += data[idx + 2] * kernel[ky + 1][kx + 1];
+            }
+          }
+          const idx = (y * width + x) * 4;
+          blurred[idx] = r / kernelSum;
+          blurred[idx + 1] = g / kernelSum;
+          blurred[idx + 2] = b / kernelSum;
+          blurred[idx + 3] = data[idx + 3];
+        }
+      }
+      return blurred;
+    };
+
+    // 应用高斯模糊
+    const blurredData = applyGaussianBlur(data, width, height);
+
     // 转换为灰度
     const grayscale = new Uint8Array(width * height);
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    for (let i = 0; i < blurredData.length; i += 4) {
+      const gray = (blurredData[i] + blurredData[i + 1] + blurredData[i + 2]) / 3;
       grayscale[i / 4] = gray;
     }
 
@@ -179,8 +234,8 @@ export default function Capture() {
     };
 
     // 计算最小和最大像素面积（根据图像大小调整）
-    const minArea = (width * height) / 3000; // 减小最小面积阈值
-    const maxArea = (width * height) / 10; // 增大最大面积阈值
+    const minArea = (width * height) / 5000; // 进一步减小最小面积阈值
+    const maxArea = (width * height) / 5; // 进一步增大最大面积阈值
 
     // 遍历所有像素
     for (let y = 0; y < height; y++) {
