@@ -103,98 +103,85 @@ export default function Capture() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // 高斯模糊预处理，减少噪声
-    const applyGaussianBlur = (data: Uint8ClampedArray, width: number, height: number) => {
-      const blurred = new Uint8ClampedArray(data.length);
-      const kernel = [
-        [1, 2, 1],
-        [2, 4, 2],
-        [1, 2, 1]
-      ];
-      const kernelSum = 16;
-      
-      for (let y = 1; y < height - 1; y++) {
-        for (let x = 1; x < width - 1; x++) {
-          let r = 0, g = 0, b = 0;
-          for (let ky = -1; ky <= 1; ky++) {
-            for (let kx = -1; kx <= 1; kx++) {
-              const idx = ((y + ky) * width + (x + kx)) * 4;
-              r += data[idx] * kernel[ky + 1][kx + 1];
-              g += data[idx + 1] * kernel[ky + 1][kx + 1];
-              b += data[idx + 2] * kernel[ky + 1][kx + 1];
-            }
-          }
-          const idx = (y * width + x) * 4;
-          blurred[idx] = r / kernelSum;
-          blurred[idx + 1] = g / kernelSum;
-          blurred[idx + 2] = b / kernelSum;
-          blurred[idx + 3] = data[idx + 3];
-        }
-      }
-      return blurred;
-    };
-
-    // 应用高斯模糊
-    const blurredData = applyGaussianBlur(data, width, height);
-
     // 转换为灰度
     const grayscale = new Uint8Array(width * height);
-    for (let i = 0; i < blurredData.length; i += 4) {
-      const gray = (blurredData[i] + blurredData[i + 1] + blurredData[i + 2]) / 3;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
       grayscale[i / 4] = gray;
     }
 
-    // 使用Otsu's方法计算最佳阈值
-    const calculateOtsuThreshold = (grayscale: Uint8Array): number => {
-      const histogram = new Array(256).fill(0);
-      let totalPixels = grayscale.length;
+    // 使用自适应阈值（局部阈值）
+    const adaptiveThreshold = (grayscale: Uint8Array, width: number, height: number, blockSize: number = 15, C: number = 10) => {
+      const binary = new Uint8Array(width * height);
+      const halfBlock = Math.floor(blockSize / 2);
       
-      // 计算直方图
-      for (let i = 0; i < grayscale.length; i++) {
-        histogram[grayscale[i]]++;
-      }
-      
-      // 计算Otsu阈值
-      let sum = 0;
-      for (let i = 0; i < 256; i++) {
-        sum += i * histogram[i];
-      }
-      
-      let sumB = 0;
-      let wB = 0;
-      let wF = 0;
-      let maxVariance = 0;
-      let threshold = 0;
-      
-      for (let i = 0; i < 256; i++) {
-        wB += histogram[i];
-        if (wB === 0) continue;
-        
-        wF = totalPixels - wB;
-        if (wF === 0) break;
-        
-        sumB += i * histogram[i];
-        const meanB = sumB / wB;
-        const meanF = (sum - sumB) / wF;
-        
-        const variance = wB * wF * Math.pow(meanB - meanF, 2);
-        if (variance > maxVariance) {
-          maxVariance = variance;
-          threshold = i;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let sum = 0;
+          let count = 0;
+          
+          // 计算局部区域的平均亮度
+          for (let ky = -halfBlock; ky <= halfBlock; ky++) {
+            for (let kx = -halfBlock; kx <= halfBlock; kx++) {
+              const nx = x + kx;
+              const ny = y + ky;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                sum += grayscale[ny * width + nx];
+                count++;
+              }
+            }
+          }
+          
+          const threshold = (sum / count) - C;
+          const index = y * width + x;
+          binary[index] = grayscale[index] < threshold ? 255 : 0;
         }
       }
       
-      return threshold;
+      return binary;
     };
 
-    // 使用Otsu阈值
-    const threshold = calculateOtsuThreshold(grayscale);
+    // 使用自适应阈值
+    const binary = adaptiveThreshold(grayscale, width, height);
 
-    // 二值化
-    const binary = new Uint8Array(width * height);
-    for (let i = 0; i < grayscale.length; i++) {
-      binary[i] = grayscale[i] < threshold ? 255 : 0; // 反转：让物体是白色
-    }
+    // 形态学操作：腐蚀和膨胀
+    const applyMorphology = (binary: Uint8Array, width: number, height: number, operation: 'erode' | 'dilate') => {
+      const result = new Uint8Array(binary.length);
+      const kernel = [
+        [0, 1, 0],
+        [1, 1, 1],
+        [0, 1, 0]
+      ];
+      
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          let min = 255;
+          let max = 0;
+          
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              if (kernel[ky + 1][kx + 1] === 1) {
+                const nx = x + kx;
+                const ny = y + ky;
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  const value = binary[ny * width + nx];
+                  min = Math.min(min, value);
+                  max = Math.max(max, value);
+                }
+              }
+            }
+          }
+          
+          result[y * width + x] = operation === 'erode' ? min : max;
+        }
+      }
+      
+      return result;
+    };
+
+    // 应用形态学操作：先腐蚀后膨胀，分离粘连物体
+    const eroded = applyMorphology(binary, width, height, 'erode');
+    const dilated = applyMorphology(eroded, width, height, 'dilate');
 
     // 连通区域标记并过滤大小
     const visited = new Array(width * height).fill(false);
@@ -204,7 +191,7 @@ export default function Capture() {
     const floodFill = (startX: number, startY: number): number => {
       if (startX < 0 || startX >= width || startY < 0 || startY >= height) return 0;
       const startIndex = startY * width + startX;
-      if (visited[startIndex] || binary[startIndex] === 0) return 0;
+      if (visited[startIndex] || dilated[startIndex] === 0) return 0;
 
       let size = 0;
       const stack = [{ x: startX, y: startY }];
@@ -214,7 +201,7 @@ export default function Capture() {
         const index = y * width + x;
         
         if (x < 0 || x >= width || y < 0 || y >= height) continue;
-        if (visited[index] || binary[index] === 0) continue;
+        if (visited[index] || dilated[index] === 0) continue;
         
         visited[index] = true;
         size++;
@@ -234,14 +221,14 @@ export default function Capture() {
     };
 
     // 计算最小和最大像素面积（根据图像大小调整）
-    const minArea = (width * height) / 5000; // 进一步减小最小面积阈值
-    const maxArea = (width * height) / 5; // 进一步增大最大面积阈值
+    const minArea = (width * height) / 8000; // 进一步减小最小面积阈值
+    const maxArea = (width * height) / 3; // 进一步增大最大面积阈值
 
     // 遍历所有像素
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const index = y * width + x;
-        if (!visited[index] && binary[index] === 255) {
+        if (!visited[index] && dilated[index] === 255) {
           const size = floodFill(x, y);
           if (size >= minArea && size <= maxArea) {
             count++;
