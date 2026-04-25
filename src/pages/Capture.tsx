@@ -71,7 +71,7 @@ export default function Capture() {
     };
   }, []);
 
-  // 实际计数算法
+  // 改进的计数算法
   const countObjects = (canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return 0;
@@ -79,48 +79,60 @@ export default function Capture() {
     // 获取图像数据
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
+    const width = canvas.width;
+    const height = canvas.height;
 
     // 转换为灰度
+    const grayscale = new Uint8Array(width * height);
     for (let i = 0; i < data.length; i += 4) {
       const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      data[i] = gray;
-      data[i + 1] = gray;
-      data[i + 2] = gray;
+      grayscale[i / 4] = gray;
     }
-    ctx.putImageData(imageData, 0, 0);
 
-    // 应用阈值处理
-    const threshold = 128;
-    for (let i = 0; i < data.length; i += 4) {
-      const value = data[i];
-      data[i] = data[i + 1] = data[i + 2] = value < threshold ? 0 : 255;
+    // 计算平均亮度作为自适应阈值
+    let totalGray = 0;
+    for (let i = 0; i < grayscale.length; i++) {
+      totalGray += grayscale[i];
     }
-    ctx.putImageData(imageData, 0, 0);
+    const threshold = totalGray / grayscale.length * 0.8; // 自适应阈值
 
-    // 简单的连通区域计数
-    const visited = new Array(canvas.width * canvas.height).fill(false);
+    // 二值化
+    const binary = new Uint8Array(width * height);
+    for (let i = 0; i < grayscale.length; i++) {
+      binary[i] = grayscale[i] < threshold ? 255 : 0; // 反转：让物体是白色
+    }
+
+    // 连通区域标记并过滤大小
+    const visited = new Array(width * height).fill(false);
     let count = 0;
 
-    const floodFill = (x: number, y: number) => {
-      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
-      const index = y * canvas.width + x;
-      if (visited[index]) return;
-      if (data[index * 4] === 0) return; // 黑色像素
+    const floodFill = (x: number, y: number): number => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+      const index = y * width + x;
+      if (visited[index] || binary[index] === 0) return 0;
 
       visited[index] = true;
-      floodFill(x + 1, y);
-      floodFill(x - 1, y);
-      floodFill(x, y + 1);
-      floodFill(x, y - 1);
+      let size = 1;
+      size += floodFill(x + 1, y);
+      size += floodFill(x - 1, y);
+      size += floodFill(x, y + 1);
+      size += floodFill(x, y - 1);
+      return size;
     };
 
+    // 计算最小和最大像素面积（根据图像大小调整）
+    const minArea = (width * height) / 1000; // 最小面积
+    const maxArea = (width * height) / 20; // 最大面积
+
     // 遍历所有像素
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        const index = y * canvas.width + x;
-        if (!visited[index] && data[index * 4] === 255) {
-          count++;
-          floodFill(x, y);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = y * width + x;
+        if (!visited[index] && binary[index] === 255) {
+          const size = floodFill(x, y);
+          if (size >= minArea && size <= maxArea) {
+            count++;
+          }
         }
       }
     }
