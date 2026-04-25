@@ -89,12 +89,51 @@ export default function Capture() {
       grayscale[i / 4] = gray;
     }
 
-    // 计算平均亮度作为自适应阈值
-    let totalGray = 0;
-    for (let i = 0; i < grayscale.length; i++) {
-      totalGray += grayscale[i];
-    }
-    const threshold = totalGray / grayscale.length * 0.8; // 自适应阈值
+    // 使用Otsu's方法计算最佳阈值
+    const calculateOtsuThreshold = (grayscale: Uint8Array): number => {
+      const histogram = new Array(256).fill(0);
+      let totalPixels = grayscale.length;
+      
+      // 计算直方图
+      for (let i = 0; i < grayscale.length; i++) {
+        histogram[grayscale[i]]++;
+      }
+      
+      // 计算Otsu阈值
+      let sum = 0;
+      for (let i = 0; i < 256; i++) {
+        sum += i * histogram[i];
+      }
+      
+      let sumB = 0;
+      let wB = 0;
+      let wF = 0;
+      let maxVariance = 0;
+      let threshold = 0;
+      
+      for (let i = 0; i < 256; i++) {
+        wB += histogram[i];
+        if (wB === 0) continue;
+        
+        wF = totalPixels - wB;
+        if (wF === 0) break;
+        
+        sumB += i * histogram[i];
+        const meanB = sumB / wB;
+        const meanF = (sum - sumB) / wF;
+        
+        const variance = wB * wF * Math.pow(meanB - meanF, 2);
+        if (variance > maxVariance) {
+          maxVariance = variance;
+          threshold = i;
+        }
+      }
+      
+      return threshold;
+    };
+
+    // 使用Otsu阈值
+    const threshold = calculateOtsuThreshold(grayscale);
 
     // 二值化
     const binary = new Uint8Array(width * height);
@@ -125,19 +164,23 @@ export default function Capture() {
         visited[index] = true;
         size++;
         
-        // 向四个方向扩展
+        // 向八个方向扩展，提高连通性
         stack.push({ x: x + 1, y });
         stack.push({ x: x - 1, y });
         stack.push({ x, y: y + 1 });
         stack.push({ x, y: y - 1 });
+        stack.push({ x: x + 1, y: y + 1 });
+        stack.push({ x: x + 1, y: y - 1 });
+        stack.push({ x: x - 1, y: y + 1 });
+        stack.push({ x: x - 1, y: y - 1 });
       }
       
       return size;
     };
 
     // 计算最小和最大像素面积（根据图像大小调整）
-    const minArea = (width * height) / 1000; // 最小面积
-    const maxArea = (width * height) / 20; // 最大面积
+    const minArea = (width * height) / 3000; // 减小最小面积阈值
+    const maxArea = (width * height) / 10; // 增大最大面积阈值
 
     // 遍历所有像素
     for (let y = 0; y < height; y++) {
