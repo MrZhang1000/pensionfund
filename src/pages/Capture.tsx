@@ -67,6 +67,63 @@ export default function Capture() {
     };
   }, []);
 
+  // 实际计数算法
+  const countObjects = (canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 0;
+
+    // 获取图像数据
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // 转换为灰度
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      data[i] = gray;
+      data[i + 1] = gray;
+      data[i + 2] = gray;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // 应用阈值处理
+    const threshold = 128;
+    for (let i = 0; i < data.length; i += 4) {
+      const value = data[i];
+      data[i] = data[i + 1] = data[i + 2] = value < threshold ? 0 : 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+
+    // 简单的连通区域计数
+    const visited = new Array(canvas.width * canvas.height).fill(false);
+    let count = 0;
+
+    const floodFill = (x: number, y: number) => {
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
+      const index = y * canvas.width + x;
+      if (visited[index]) return;
+      if (data[index * 4] === 0) return; // 黑色像素
+
+      visited[index] = true;
+      floodFill(x + 1, y);
+      floodFill(x - 1, y);
+      floodFill(x, y + 1);
+      floodFill(x, y - 1);
+    };
+
+    // 遍历所有像素
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const index = y * canvas.width + x;
+        if (!visited[index] && data[index * 4] === 255) {
+          count++;
+          floodFill(x, y);
+        }
+      }
+    }
+
+    return count;
+  };
+
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current) return;
 
@@ -82,13 +139,13 @@ export default function Capture() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     }
 
-    // 模拟识别过程
+    // 执行实际计数
     setTimeout(() => {
+      // 计算物体数量
+      const count = countObjects(canvas);
+      
       // 将画布转换为图片数据
       const imageData = canvas.toDataURL('image/jpeg');
-      
-      // 模拟计数结果（实际应用中这里会调用识别算法）
-      const count = Math.floor(Math.random() * 50) + 10; // 生成10-60之间的随机数
       
       // 跳转到结果页面
       navigate('/result', { 
@@ -121,10 +178,22 @@ export default function Capture() {
     reader.onload = (event) => {
       const imageData = event.target?.result as string;
       
-      // 模拟识别过程
-      setTimeout(() => {
-        // 模拟计数结果
-        const count = Math.floor(Math.random() * 50) + 10; // 生成10-60之间的随机数
+      // 创建一个临时画布来处理图片
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // 设置画布大小
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // 绘制图片到画布
+        ctx.drawImage(img, 0, 0);
+        
+        // 执行实际计数
+        const count = countObjects(canvas);
         
         // 跳转到结果页面
         navigate('/result', { 
@@ -134,7 +203,8 @@ export default function Capture() {
             image: imageData 
           } 
         });
-      }, 1000);
+      };
+      img.src = imageData;
     };
     reader.readAsDataURL(file);
   };
