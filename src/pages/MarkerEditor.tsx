@@ -178,10 +178,10 @@ export default function MarkerEditor() {
             const centerY = sumY / region.length;
             
             // 转换为相对坐标 (0-1)
-            const relativeX = centerX / width;
-            const relativeY = centerY / height;
+            const relativeX = centerX / img.width;
+            const relativeY = centerY / img.height;
             
-            regions.push({ x: relativeX, y: relativeY, color: 'green' });
+            regions.push({ id: Date.now().toString() + Math.random().toString(36).substr(2, 9), x: relativeX, y: relativeY, color: 'green' });
           }
         }
       }
@@ -296,8 +296,8 @@ export default function MarkerEditor() {
     
     return currentMarkers.map((marker) => {
       // 计算标记在屏幕上的位置
-      const screenX = (marker.x / imageSize.width) * img.width;
-      const screenY = (marker.y / imageSize.height) * img.height;
+      const screenX = marker.x * img.width;
+      const screenY = marker.y * img.height;
 
       return (
         <div
