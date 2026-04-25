@@ -43,6 +43,8 @@ export default function Capture() {
     'corn': '玉米粒',
   };
 
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   useEffect(() => {
     // 启动相机
     const startCamera = async () => {
@@ -51,9 +53,11 @@ export default function Capture() {
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
           setStream(mediaStream);
+          setCameraError(null);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
+        setCameraError('无法访问相机，请检查权限设置');
       }
     };
 
@@ -177,34 +181,57 @@ export default function Capture() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const imageData = event.target?.result as string;
+      if (!imageData) {
+        console.error('Failed to read file');
+        setIsCapturing(false);
+        return;
+      }
       
       // 创建一个临时画布来处理图片
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) {
+        console.error('Failed to get canvas context');
+        setIsCapturing(false);
+        return;
+      }
 
       const img = new Image();
       img.onload = () => {
-        // 设置画布大小
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        // 绘制图片到画布
-        ctx.drawImage(img, 0, 0);
-        
-        // 执行实际计数
-        const count = countObjects(canvas);
-        
-        // 跳转到结果页面
-        navigate('/result', { 
-          state: { 
-            count, 
-            type, 
-            image: imageData 
-          } 
-        });
+        try {
+          // 设置画布大小
+          canvas.width = img.width;
+          canvas.height = img.height;
+          
+          // 绘制图片到画布
+          ctx.drawImage(img, 0, 0);
+          
+          // 执行实际计数
+          const count = countObjects(canvas);
+          console.log('Count result:', count);
+          
+          // 跳转到结果页面
+          navigate('/result', { 
+            state: { 
+              count, 
+              type, 
+              image: imageData 
+            } 
+          });
+        } catch (error) {
+          console.error('Error processing image:', error);
+          setIsCapturing(false);
+        }
+      };
+      img.onerror = (error) => {
+        console.error('Error loading image:', error);
+        setIsCapturing(false);
       };
       img.src = imageData;
+    };
+    reader.onerror = (error) => {
+      console.error('Error reading file:', error);
+      setIsCapturing(false);
     };
     reader.readAsDataURL(file);
   };
@@ -223,12 +250,19 @@ export default function Capture() {
       </div>
 
       {/* 相机预览 */}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        className="flex-1 w-full object-cover"
-      />
+      {cameraError ? (
+        <div className="flex-1 w-full flex flex-col items-center justify-center text-white p-4">
+          <p className="text-center mb-4">{cameraError}</p>
+          <p className="text-center text-sm">您仍然可以通过上传照片来进行计数</p>
+        </div>
+      ) : (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          className="flex-1 w-full object-cover"
+        />
+      )}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* 拍照和上传按钮 */}
