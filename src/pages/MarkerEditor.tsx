@@ -55,6 +55,16 @@ export default function MarkerEditor() {
     'corn': '玉米粒',
   };
 
+  // 单独的useEffect来加载历史记录的标记
+  useEffect(() => {
+    if (id && imageLoaded) {
+      const record = records.find((r) => r.id === id);
+      if (record) {
+        record.markers.forEach((marker) => addMarker(marker));
+      }
+    }
+  }, [id, records, imageLoaded, addMarker]);
+
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.target as HTMLImageElement;
     setImageSize({
@@ -62,14 +72,6 @@ export default function MarkerEditor() {
       height: img.naturalHeight,
     });
     setImageLoaded(true);
-    
-    // 如果是编辑历史记录，加载之前的标记
-    if (id) {
-      const record = records.find((r) => r.id === id);
-      if (record) {
-        record.markers.forEach((marker) => addMarker(marker));
-      }
-    }
   };
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
