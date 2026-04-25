@@ -111,7 +111,7 @@ export default function Capture() {
     }
 
     // 使用自适应阈值（局部阈值）
-    const adaptiveThreshold = (grayscale: Uint8Array, width: number, height: number, blockSize: number = 21, C: number = 15) => {
+    const adaptiveThreshold = (grayscale: Uint8Array, width: number, height: number, blockSize: number = 25, C: number = 20) => {
       const binary = new Uint8Array(width * height);
       const halfBlock = Math.floor(blockSize / 2);
       
@@ -184,8 +184,8 @@ export default function Capture() {
     };
 
     // 应用形态学操作：先膨胀后腐蚀，去除噪声
-    const dilated = applyMorphology(binary, width, height, 'dilate', 1);
-    const eroded = applyMorphology(dilated, width, height, 'erode', 1);
+    const dilated = applyMorphology(binary, width, height, 'dilate', 2);
+    const eroded = applyMorphology(dilated, width, height, 'erode', 2);
 
     // 连通区域标记并过滤大小
     const visited = new Array(width * height).fill(false);
@@ -225,8 +225,8 @@ export default function Capture() {
     };
 
     // 计算最小和最大像素面积（根据图像大小调整）
-    const minArea = (width * height) / 3000; // 增大最小面积阈值，过滤噪声
-    const maxArea = (width * height) / 10; // 减小最大面积阈值
+    const minArea = (width * height) / 2000; // 进一步增大最小面积阈值，过滤更多噪声
+    const maxArea = (width * height) / 15; // 进一步减小最大面积阈值
 
     // 遍历所有像素
     for (let y = 0; y < height; y++) {
