@@ -26,7 +26,7 @@ export default function MarkerEditor() {
     } else if (location.state?.image) {
       setCurrentImage(location.state.image);
     }
-  }, [id, records, location.state, setCurrentImage, clearMarkers]);
+  }, [id, records, setCurrentImage, clearMarkers]);
 
   const objectTypeNames: Record<string, string> = {
     'steel-pipe': '钢管',
